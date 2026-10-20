@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Caesar Cipher — Cyber UI</title>
+    <meta name="description" content="Neon cyber Caesar cipher: encrypt and decrypt with style." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Roboto+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg: #05070b;
+        --panel: rgba(15, 20, 30, 0.55);
+        --panel-border: rgba(0, 255, 200, 0.25);
+        --text: #e6f6ff;
+        --muted: #94a3b8;
+        --neon-cyan: #00fff0;
+        --neon-purple: #a78bfa;
+        --neon-green: #55ff99;
+        --accent: #22d3ee;
+        --danger: #ff6b6b;
+        --shadow: 0 10px 40px rgba(0, 255, 240, 0.08);
+      }
+
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        background: var(--bg);
+        overflow-x: hidden;
+      }
+      body:not(.ready) .page { opacity: 0; filter: blur(4px); transform: translateY(8px); }
+      body.ready .page { opacity: 1; filter: none; transform: none; transition: opacity .6s ease, transform .6s ease, filter .6s ease; }
+
+      /* Matrix canvas background */
+      #matrix-bg {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 0;
+        background: radial-gradient(1200px 600px at 20% -10%, rgba(34,211,238,0.08) 0%, transparent 60%),
+                    radial-gradient(1000px 500px at 100% 10%, rgba(167,139,250,0.10) 0%, transparent 60%);
+      }
+
+      /* Layout */
+      .page {
+        position: relative;
+        z-index: 1;
+        min-height: 100%;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      .shell {
+        width: 100%;
+        max-width: 980px;
+      }
+
+      /* Glitch title */
+      .title {
+        font-family: "Roboto Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-weight: 600;
+        font-size: clamp(28px, 4vw, 44px);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        position: relative;
+        width: max-content;
+        margin: 8px 0 2px 2px;
+        color: var(--neon-cyan);
+        text-shadow: 0 0 12px rgba(0,255,240,.6), 0 0 32px rgba(0,255,240,.25);
+      }
+      .title::before,
+      .title::after {
+        content: attr(data-text);
+        position: absolute;
+        left: 0; top: 0;
+        mix-blend-mode: screen;
+        filter: blur(.6px) saturate(120%);
+        opacity: .8;
+        pointer-events: none;
+      }
+      .title::before { color: var(--neon-purple); transform: translate(-2px, 0); animation: glitch-x 3.2s infinite ease-in-out; }
+      .title::after { color: var(--neon-green); transform: translate(2px, 0); animation: glitch-y 2.8s infinite ease-in-out; }
+      @keyframes glitch-x { 0%,100%{transform:translate(-1px,0)} 20%{transform:translate(-3px,0)} 40%{transform:translate(1px,0)} 60%{transform:translate(-2px,0)} 80%{transform:translate(2px,0)} }
+      @keyframes glitch-y { 0%,100%{transform:translate(2px,0)} 20%{transform:translate(1px,0)} 40%{transform:translate(-2px,0)} 60%{transform:translate(3px,0)} 80%{transform:translate(-1px,0)} }
+
+      .subtitle { margin: 0 0 18px 4px; color: var(--muted); }
+
+      /* Glass/neon card */
+      .card {
+        background: linear-gradient(180deg, rgba(15,20,30,.65), rgba(10,14,22,.55));
+        border: 1px solid var(--panel-border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(10px) saturate(130%);
+        -webkit-backdrop-filter: blur(10px) saturate(130%);
+        overflow: hidden;
+      }
+
+      .card__body { padding: 20px; display: grid; gap: 14px; }
+
+      /* Form elements */
+      label { font-weight: 600; letter-spacing: .02em; }
+      .field { display: grid; gap: 8px; }
+      .row { display: flex; gap: 10px; align-items: center; }
+      input[type="number"], textarea {
+        width: 100%;
+        color: var(--text);
+        background: rgba(8, 12, 20, 0.8);
+        border: 1px solid rgba(0, 255, 240, 0.18);
+        border-radius: 12px;
+        padding: 12px 14px;
+        outline: none;
+        transition: border-color .2s ease, box-shadow .2s ease, transform .05s ease;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      input[type="number"]:focus, textarea:focus {
+        border-color: var(--neon-cyan);
+        box-shadow: 0 0 0 3px rgba(0,255,240,.18), 0 0 24px rgba(0,255,240,.12) inset;
+      }
+      textarea { resize: vertical; min-height: 120px; }
+      small { color: var(--muted); }
+
+      /* Segmented toggle */
+      .segmented { display: inline-flex; border: 1px solid rgba(0,255,240,.25); border-radius: 12px; overflow: hidden; }
+      .tab {
+        position: relative;
+        background: rgba(10,16,26,.8);
+        color: var(--text);
+        border: none;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: transform .12s ease, background .2s ease, box-shadow .2s ease;
+      }
+      .tab:hover { transform: translateY(-1px); }
+      .tab.is-active { background: rgba(0,255,240,.18); box-shadow: 0 0 0 1px rgba(0,255,240,.35) inset, 0 0 20px rgba(0,255,240,.12) inset; }
+
+      /* Buttons */
+      .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+      .btn {
+        appearance: none;
+        border: 1px solid rgba(0,255,240,.25);
+        background: linear-gradient(180deg, rgba(10,16,26,.9), rgba(6,10,18,.9));
+        color: var(--text);
+        padding: 11px 16px;
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: 600;
+        letter-spacing: .02em;
+        transition: transform .12s ease, filter .2s ease, box-shadow .25s ease, border-color .25s ease;
+        will-change: transform;
+      }
+      .btn::after {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; right: 0; bottom: 0;
+        border-radius: 12px;
+        pointer-events: none;
+        box-shadow: 0 0 0 0 rgba(0,255,240,.0);
+        transition: box-shadow .25s ease;
+      }
+      .btn:hover::after { box-shadow: 0 0 20px 6px rgba(0,255,240,.10); }
+      .btn:hover { transform: translateY(-1px) scale(1.02); filter: brightness(1.05); box-shadow: 0 8px 24px rgba(0,255,240,.12); }
+      .btn:active { transform: translateY(0) scale(0.99); }
+      .btn.primary { border-color: rgba(34,211,238,.6); background: linear-gradient(180deg, rgba(34,211,238,.22), rgba(34,211,238,.12)); box-shadow: 0 0 0 1px rgba(34,211,238,.35) inset, 0 0 24px rgba(34,211,238,.18) inset; }
+      .btn.secondary { border-color: rgba(167,139,250,.4); background: linear-gradient(180deg, rgba(167,139,250,.20), rgba(167,139,250,.10)); }
+      .btn.link { background: transparent; border-color: transparent; color: var(--accent); padding-left: 0; padding-right: 0; }
+
+      .end { justify-content: flex-end; }
+
+      /* Footer */
+      .footer { color: var(--muted); text-align: center; padding: 14px; font-size: 13px; }
+      .footer a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted rgba(148,163,184,.35); }
+      .footer a:hover { color: var(--text); border-color: rgba(0,255,240,.45); }
+
+      /* Responsive */
+      @media (max-width: 640px) {
+        .card__body { padding: 16px; }
+      }
+
+      /* Splash screen */
+      .splash {
+        position: fixed;
+        inset: 0;
+        z-index: 3;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(60% 40% at 50% 30%, rgba(0,255,240,.08), transparent 60%),
+                    linear-gradient(180deg, rgba(5,7,11,.9), rgba(5,7,11,.92));
+        backdrop-filter: blur(6px) saturate(120%);
+        -webkit-backdrop-filter: blur(6px) saturate(120%);
+        transition: opacity .6s ease, visibility .6s ease;
+      }
+      .splash.is-hidden { opacity: 0; visibility: hidden; }
+      .splash__card {
+        padding: 28px 26px;
+        text-align: center;
+        border-radius: 16px;
+        border: 1px solid rgba(0,255,240,.25);
+        background: rgba(10,14,22,.55);
+        box-shadow: 0 20px 60px rgba(0,255,240,.08);
+        animation: floaty 3.6s ease-in-out infinite;
+        position: relative;
+        overflow: hidden;
+      }
+      @keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+      .splash__hello { color: var(--neon-green); letter-spacing: .12em; font-weight: 700; margin: 0 0 6px; text-transform: uppercase; opacity: .95; }
+      .splash__title { font-weight: 700; font-size: clamp(26px, 4.6vw, 40px); margin: 6px 0 10px; color: var(--neon-cyan); text-shadow: 0 0 14px rgba(0,255,240,.45), 0 0 28px rgba(0,255,240,.18); }
+      .splash__message { max-width: 640px; margin: 10px auto 0; color: var(--text); opacity: .95; min-height: 3.2em; }
+      .typewriter { border-right: 2px solid rgba(0,255,240,.75); white-space: pre-wrap; overflow: hidden; animation: caret 1s steps(1) infinite; }
+      @keyframes caret { 0%, 60% { border-color: rgba(0,255,240,.75);} 61%, 100% { border-color: transparent; } }
+      .splash__hint { color: var(--muted); font-size: 13px; margin-top: 10px; }
+      .splash__enter { margin-top: 12px; position: relative; }
+      .splash .btn.primary { animation: pulse 2.2s ease-in-out infinite; }
+      @keyframes pulse { 0%,100%{filter:brightness(1); box-shadow:0 0 0 rgba(34,211,238,0)} 50%{filter:brightness(1.08); box-shadow:0 0 24px rgba(34,211,238,.25)} }
+      .splash__scan {
+        position: absolute;
+        left: -20%;
+        right: -20%;
+        top: 0;
+        height: 2px;
+        background: linear-gradient(90deg, transparent, rgba(0,255,240,.5), transparent);
+        animation: scan 2.8s linear infinite;
+      }
+      @keyframes scan { 0%{transform:translateY(-10%)} 100%{transform:translateY(110%)} }
+      .splash__ring {
+        position: absolute;
+        inset: -1px;
+        pointer-events: none;
+        background: conic-gradient(from 0deg, rgba(0,255,240,.0), rgba(0,255,240,.15), rgba(167,139,250,.15), rgba(0,255,240,.0));
+        mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+        animation: rotate 6s linear infinite;
+      }
+      @keyframes rotate { to { transform: rotate(1turn); } }
+
+      /* Output container + run animation */
+      .output-field { position: relative; }
+      .output-overlay {
+        position: absolute;
+        inset: 36px 6px 6px 6px; /* inside label padding */
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(180deg, rgba(10,16,26,.70), rgba(6,10,18,.70));
+        border: 1px solid rgba(0,255,240,.25);
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,255,240,.10) inset;
+      }
+      .output-field.running .output-overlay { display: flex; }
+      .spinner {
+        width: 24px; height: 24px;
+        border-radius: 999px;
+        border: 2px solid rgba(0,255,240,.25);
+        border-top-color: var(--neon-cyan);
+        animation: spin 0.8s linear infinite, glow 1.2s ease-in-out infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      @keyframes glow { 0%,100%{ box-shadow: 0 0 0 rgba(0,255,240,0);} 50%{ box-shadow: 0 0 16px rgba(0,255,240,.35);} }
+
+      /* (dragon intro removed) */
+    </style>
+  </head>
+  <body>
+    <div id="splash" class="splash" aria-label="Intro">
+      <div class="splash__card" role="dialog" aria-modal="true" aria-labelledby="splash-title">
+        <div class="splash__scan"></div>
+        <div class="splash__ring"></div>
+        <div class="splash__hello">WELCOME</div>
+        <div id="splash-title" class="splash__title">Welcome to Caesar Cipher 🔐</div>
+        <div class="splash__message"><span id="splash-typer" class="typewriter" aria-live="polite"></span></div>
+        <div class="splash__enter">
+          <button id="splash-enter" class="btn primary" type="button">Enter</button>
+        </div>
+        <div class="splash__hint">Press Enter or click to continue</div>
+      </div>
+    </div>
+    
+    <canvas id="matrix-bg" aria-hidden="true"></canvas>
+
+    <div class="page">
+      <div class="shell">
+        <header>
+          <h1 class="title" data-text="Caesar Cipher">Caesar Cipher</h1>
+          <p class="subtitle">Encrypt and decrypt text • crafted by <strong>PARAG PATEL</strong>.</p>
+        </header>
+
+        <main class="card" aria-label="Caesar cipher tool">
+          <div class="card__body">
+            <form id="cipher-form" onsubmit="return false;" novalidate>
+              <div class="field">
+                <label for="mode">Mode</label>
+                <div class="segmented" role="tablist" aria-label="Mode">
+                  <button type="button" id="mode-encrypt" class="tab is-active" aria-selected="true" role="tab">Encrypt</button>
+                  <button type="button" id="mode-decrypt" class="tab" aria-selected="false" role="tab">Decrypt</button>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="shift">Shift</label>
+                <div class="row">
+                  <input id="shift" name="shift" type="number" value="3" min="-25" max="25" step="1" aria-describedby="shift-help" />
+                  <button type="button" id="btn-random" class="btn secondary" title="Random shift">Random</button>
+                </div>
+                <small id="shift-help">Choose a value between -25 and 25.</small>
+              </div>
+
+              <div class="field">
+                <label for="input-text">Input text</label>
+                <textarea id="input-text" name="input" rows="7" placeholder="Type or paste text here..."></textarea>
+              </div>
+
+              <div class="actions">
+                <button id="btn-run" type="button" class="btn primary">Run</button>
+                <button id="btn-clear" type="button" class="btn">Clear</button>
+              </div>
+
+              <div class="field output-field" id="output-field">
+                <label for="output-text">Output</label>
+                <textarea id="output-text" rows="7" readonly aria-live="polite"></textarea>
+                <div class="output-overlay" aria-hidden="true">
+                  <div class="spinner" role="status" aria-label="Processing"></div>
+                </div>
+                <div class="actions end">
+                  <button id="btn-copy" type="button" class="btn link">Copy output</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </main>
+
+        <footer class="footer" role="contentinfo">
+          <div>© 2025 PARAG PATEL • <a href="LICENSE">MIT License</a></div>
+        </footer>
+      </div>
+    </div>
+
+    <script>
+      // Matrix background animation (simple, efficient)
+      (function matrix() {
+        const canvas = document.getElementById('matrix-bg');
+        const ctx = canvas.getContext('2d');
+        let width = canvas.width = window.innerWidth;
+        let height = canvas.height = window.innerHeight;
+        const letters = 'アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const fontSize = 14;
+        let columns = Math.floor(width / fontSize);
+        let drops = Array.from({ length: columns }, () => Math.floor(Math.random() * -20));
+
+        function resize() {
+          width = canvas.width = window.innerWidth;
+          height = canvas.height = window.innerHeight;
+          columns = Math.floor(width / fontSize);
+          drops = Array.from({ length: columns }, () => Math.floor(Math.random() * -20));
+        }
+        window.addEventListener('resize', resize);
+
+        function draw() {
+          ctx.fillStyle = 'rgba(5,7,11,0.35)';
+          ctx.fillRect(0, 0, width, height);
+          ctx.fillStyle = 'rgba(0,255,240,0.75)';
+          ctx.font = fontSize + 'px "Roboto Mono", monospace';
+          for (let i = 0; i < drops.length; i += 1) {
+            const text = letters[Math.floor(Math.random() * letters.length)];
+            const x = i * fontSize;
+            const y = drops[i] * fontSize;
+            ctx.fillText(text, x, y);
+            if (y > height && Math.random() > 0.975) drops[i] = 0; else drops[i] += 1;
+          }
+          requestAnimationFrame(draw);
+        }
+        draw();
+      })();
+
+      // Caesar cipher logic + UI bindings
+      (function () {
+        const state = { mode: 'encrypt' };
+        const $ = (sel) => document.querySelector(sel);
+        const el = {
+          modeEncrypt: $('#mode-encrypt'),
+          modeDecrypt: $('#mode-decrypt'),
+          shift: $('#shift'),
+          random: $('#btn-random'),
+          input: $('#input-text'),
+          output: $('#output-text'),
+          run: $('#btn-run'),
+          clear: $('#btn-clear'),
+          copy: $('#btn-copy'),
+          splash: $('#splash'),
+          splashEnter: $('#splash-enter'),
+        };
+
+        function normalizeShift(raw) {
+          const n = Number(raw);
+          if (!Number.isFinite(n)) return 0;
+          let s = ((n % 26) + 26) % 26; // [0,25]
+          return s;
+        }
+        function shiftChar(char, shift) {
+          const code = char.charCodeAt(0);
+          if (code >= 65 && code <= 90) return String.fromCharCode(((code - 65 + shift + 26) % 26) + 65);
+          if (code >= 97 && code <= 122) return String.fromCharCode(((code - 97 + shift + 26) % 26) + 97);
+          return char;
+        }
+        function caesarCipher(text, shift) {
+          let out = '';
+          for (let i = 0; i < text.length; i += 1) out += shiftChar(text[i], shift);
+          return out;
+        }
+        function runCipher() {
+          const rawShift = parseInt(el.shift.value, 10);
+          const s = normalizeShift(rawShift);
+          const input = el.input.value || '';
+          const shift = state.mode === 'encrypt' ? s : -s;
+          const field = document.getElementById('output-field');
+          if (field) field.classList.add('running');
+          el.output.value = '';
+          setTimeout(() => {
+            el.output.value = caesarCipher(input, shift);
+            if (field) field.classList.remove('running');
+          }, 600); // brief processing animation
+        }
+        function setMode(mode) {
+          if (mode !== 'encrypt' && mode !== 'decrypt') return;
+          state.mode = mode;
+          el.modeEncrypt.classList.toggle('is-active', mode === 'encrypt');
+          el.modeDecrypt.classList.toggle('is-active', mode === 'decrypt');
+          el.modeEncrypt.setAttribute('aria-selected', String(mode === 'encrypt'));
+          el.modeDecrypt.setAttribute('aria-selected', String(mode === 'decrypt'));
+          runCipher();
+        }
+        function randomShift() {
+          const s = Math.floor(Math.random() * 25) + 1; // 1..25
+          el.shift.value = String(s);
+          runCipher();
+        }
+        function clearAll() {
+          el.input.value = '';
+          el.output.value = '';
+          el.input.focus();
+        }
+        async function copyOutput() {
+          const text = el.output.value || '';
+          if (!text) return;
+          try {
+            await navigator.clipboard.writeText(text);
+            const prev = el.copy.textContent;
+            el.copy.textContent = 'Copied!';
+            setTimeout(() => { el.copy.textContent = prev; }, 1200);
+          } catch (_) { /* no-op */ }
+        }
+
+        // Wire up events
+        el.modeEncrypt.addEventListener('click', () => setMode('encrypt'));
+        el.modeDecrypt.addEventListener('click', () => setMode('decrypt'));
+        el.random.addEventListener('click', randomShift);
+        el.run.addEventListener('click', runCipher);
+        el.clear.addEventListener('click', clearAll);
+        el.copy.addEventListener('click', copyOutput);
+        // Do not auto-run on input; output remains blank until Run is pressed
+        // el.input.addEventListener('input', runCipher);
+        // el.shift.addEventListener('input', runCipher);
+
+        // Splash handling
+        function speakWelcome() {
+          try {
+            const utter = new SpeechSynthesisUtterance('Welcome to the website. This project was created by Parag Patel.');
+            utter.lang = 'en-US';
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utter);
+          } catch (_) { /* no-op */ }
+        }
+
+        // (dragon intro removed)
+
+        function hideSplash(shouldSpeak) {
+          if (!el.splash || el.splash.classList.contains('is-hidden')) return;
+          el.splash.classList.add('is-hidden');
+          document.body.classList.add('ready');
+          if (shouldSpeak) speakWelcome();
+          setTimeout(() => { if (el.splash) el.splash.style.display = 'none'; }, 650);
+          // No extra intro after splash
+        }
+        if (el.splashEnter) el.splashEnter.addEventListener('click', () => hideSplash(true));
+        document.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') hideSplash(true); });
+
+        // Typewriter intro text
+        const typerEl = document.getElementById('splash-typer');
+        const typerText = 'Step into the world of encryption! Protect your secrets, decode mysteries, and explore the power of ancient cryptography with a modern twist.';
+        let i = 0;
+        function typeNext() {
+          if (!typerEl) return;
+          if (i <= typerText.length) {
+            typerEl.textContent = typerText.slice(0, i);
+            i += 1;
+            const delay = i < 12 ? 28 : 16 + Math.random() * 18; // slightly faster after first words
+            setTimeout(typeNext, delay);
+          }
+        }
+        setTimeout(typeNext, 400);
+
+        // Initial state: keep output empty until Run is clicked
+        el.output.value = '';
+      })();
+    </script>
+  </body>
+  </html>
+
+
